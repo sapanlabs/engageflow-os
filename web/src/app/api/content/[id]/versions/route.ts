@@ -19,6 +19,9 @@ export async function POST(
     contentId: id,
     mediaUrl: body.mediaUrl ?? `https://picsum.photos/seed/api${Date.now()}/1200/1200`,
     mediaType: body.mediaType,
+    width: typeof body.width === "number" ? body.width : undefined,
+    height: typeof body.height === "number" ? body.height : undefined,
+    posterUrl: body.posterUrl,
     notes: body.notes,
     authorId,
   });

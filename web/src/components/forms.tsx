@@ -16,6 +16,7 @@ import {
   STYLE_LABELS,
 } from "@/lib/constants";
 import { useAiStatus } from "@/components/ai-hooks";
+import { MediaField, type MediaValue } from "@/components/media-field";
 
 function useDisclosure() {
   const [open, setOpen] = useState(false);
@@ -171,14 +172,14 @@ export function NewContentButton({
   const [caption, setCaption] = useState("");
   const [platform, setPlatform] = useState<string>(PLATFORMS.INSTAGRAM_POST);
   const [style, setStyle] = useState<string>("STATIC_POST");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [media, setMedia] = useState<MediaValue | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [hashtags, setHashtags] = useState<string[]>([]);
 
   function reset() {
     setTitle(""); setCaption(""); setPlatform(PLATFORMS.INSTAGRAM_POST);
-    setStyle("STATIC_POST"); setMediaUrl(""); setHashtags([]); setAiError(null);
+    setStyle("STATIC_POST"); setMedia(null); setHashtags([]); setAiError(null);
   }
 
   async function draftWithAi() {
@@ -210,7 +211,13 @@ export function NewContentButton({
     fd.set("caption", hashtags.length ? `${caption}\n\n${hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ")}` : caption);
     fd.set("platform", platform);
     fd.set("style", style);
-    fd.set("mediaUrl", mediaUrl);
+    if (media) {
+      fd.set("mediaUrl", media.url);
+      fd.set("mediaType", media.mediaType);
+      if (media.width) fd.set("width", String(media.width));
+      if (media.height) fd.set("height", String(media.height));
+      if (media.posterUrl) fd.set("posterUrl", media.posterUrl);
+    }
     start(async () => {
       const id = await createContentAction(fd);
       setOpen(false);
@@ -263,8 +270,8 @@ export function NewContentButton({
             </div>
           </div>
           <div>
-            <label className={labelCls}>Media URL (optional)</label>
-            <input value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} className={inputCls} placeholder="Leave blank for a placeholder image" />
+            <label className={labelCls}>Media</label>
+            <MediaField value={media} onChange={setMedia} projectId={projectId} />
           </div>
           <div className="mt-2 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => { setOpen(false); reset(); }} type="button">Cancel</Button>
@@ -279,20 +286,41 @@ export function NewContentButton({
 export function AddVersionButton({
   contentId,
   editorId,
+  projectId,
+  clientId,
 }: {
   contentId: string;
   editorId: string;
+  projectId?: string;
+  clientId?: string;
 }) {
   const { open, setOpen } = useDisclosure();
   const [pending, start] = useTransition();
   const router = useRouter();
+  const [media, setMedia] = useState<MediaValue | null>(null);
+  const [notes, setNotes] = useState("");
 
-  function submit(fd: FormData) {
+  function close() {
+    setOpen(false);
+    setMedia(null);
+    setNotes("");
+  }
+
+  function submit() {
+    const fd = new FormData();
     fd.set("contentId", contentId);
     fd.set("authorId", editorId);
+    fd.set("notes", notes);
+    if (media) {
+      fd.set("mediaUrl", media.url);
+      fd.set("mediaType", media.mediaType);
+      if (media.width) fd.set("width", String(media.width));
+      if (media.height) fd.set("height", String(media.height));
+      if (media.posterUrl) fd.set("posterUrl", media.posterUrl);
+    }
     start(async () => {
       await addVersionAction(fd);
-      setOpen(false);
+      close();
       router.refresh();
     });
   }
@@ -300,21 +328,21 @@ export function AddVersionButton({
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>Upload new version</Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="Upload new version">
-        <form action={submit} className="flex flex-col gap-3">
+      <Modal open={open} onClose={close} title="Upload new version">
+        <div className="flex flex-col gap-3">
           <div>
-            <label className={labelCls}>Media URL (optional)</label>
-            <input name="mediaUrl" className={inputCls} placeholder="Leave blank for a placeholder image" />
+            <label className={labelCls}>Media</label>
+            <MediaField value={media} onChange={setMedia} projectId={projectId} clientId={clientId} />
           </div>
           <div>
             <label className={labelCls}>Notes for this revision</label>
-            <textarea name="notes" rows={3} className={inputCls} placeholder="What changed since last version" />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={inputCls} placeholder="What changed since last version" />
           </div>
           <div className="mt-2 flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)} type="button">Cancel</Button>
-            <Button type="submit" disabled={pending}>{pending ? "Uploading…" : "Upload version"}</Button>
+            <Button variant="ghost" onClick={close} type="button">Cancel</Button>
+            <Button type="button" onClick={submit} disabled={pending}>{pending ? "Uploading…" : "Upload version"}</Button>
           </div>
-        </form>
+        </div>
       </Modal>
     </>
   );

@@ -39,7 +39,7 @@ export default async function ContentPage({
           </div>
           <div className="flex gap-2">
             <ShareLink token={content.previewToken} />
-            <AddVersionButton contentId={content.id} editorId={editor.id} />
+            <AddVersionButton contentId={content.id} editorId={editor.id} projectId={content.projectId} clientId={content.project.clientId} />
           </div>
         </div>
       </div>

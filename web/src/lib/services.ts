@@ -79,6 +79,9 @@ export async function createContent(input: {
   style: string;
   mediaUrl: string;
   mediaType?: string;
+  width?: number;
+  height?: number;
+  posterUrl?: string;
   authorId: string;
 }) {
   const content = await db.content.create({
@@ -94,6 +97,9 @@ export async function createContent(input: {
           number: 1,
           mediaUrl: input.mediaUrl,
           mediaType: input.mediaType ?? "image",
+          width: input.width,
+          height: input.height,
+          posterUrl: input.posterUrl,
           authorId: input.authorId,
         },
       },
@@ -115,6 +121,9 @@ export async function addVersion(input: {
   contentId: string;
   mediaUrl: string;
   mediaType?: string;
+  width?: number;
+  height?: number;
+  posterUrl?: string;
   notes?: string;
   authorId: string;
 }) {
@@ -129,6 +138,9 @@ export async function addVersion(input: {
       number,
       mediaUrl: input.mediaUrl,
       mediaType: input.mediaType ?? "image",
+      width: input.width,
+      height: input.height,
+      posterUrl: input.posterUrl,
       notes: input.notes,
       authorId: input.authorId,
     },

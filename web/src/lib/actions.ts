@@ -42,6 +42,10 @@ export async function createContentAction(formData: FormData) {
     platform: String(formData.get("platform")),
     style: String(formData.get("style")),
     mediaUrl: String(formData.get("mediaUrl") || `https://picsum.photos/seed/${Date.now()}/1200/1200`),
+    mediaType: str(formData.get("mediaType")),
+    width: num(formData.get("width")),
+    height: num(formData.get("height")),
+    posterUrl: str(formData.get("posterUrl")),
     authorId: String(formData.get("authorId")),
   });
   revalidatePath(`/projects/${content.projectId}`);
@@ -53,6 +57,10 @@ export async function addVersionAction(formData: FormData) {
   await svc.addVersion({
     contentId,
     mediaUrl: String(formData.get("mediaUrl") || `https://picsum.photos/seed/v${Date.now()}/1200/1200`),
+    mediaType: str(formData.get("mediaType")),
+    width: num(formData.get("width")),
+    height: num(formData.get("height")),
+    posterUrl: str(formData.get("posterUrl")),
     notes: str(formData.get("notes")),
     authorId: String(formData.get("authorId")),
   });
