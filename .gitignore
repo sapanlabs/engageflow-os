@@ -1,0 +1,19 @@
+# OS
+.DS_Store
+
+# env / secrets (never commit)
+.env
+.env.*
+*.pem
+
+# dependencies / build artifacts (belt-and-suspenders; web/.gitignore also covers these)
+**/node_modules
+**/.next
+**/out
+
+# local SQLite dev database
+**/prisma/*.db
+**/prisma/*.db-journal
+
+# uploaded files
+web/public/uploads/*

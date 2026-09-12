@@ -1,0 +1,462 @@
+// EngageFlow schema.
+// Written Postgres-compatible; runs locally on SQLite.
+// Enums are modeled as String + app-level constants (src/lib/constants.ts)
+// so the exact schema ports to Postgres without change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  // Billing (Dodo Payments)
+  plan               String    @default("FREELANCER") // FREELANCER | AGENCY | ENTERPRISE
+  planStatus         String    @default("active") // active | trialing | on_hold | canceled
+  dodoCustomerId     String?
+  dodoSubscriptionId String?
+  currentPeriodEnd   DateTime?
+
+  users    User[]
+  clients  Client[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  workspaceId  String
+  name         String
+  email        String   @unique
+  role         String // ADMIN | CREATIVE_LEAD | SOCIAL_MEDIA_MANAGER | EDITOR | CLIENT
+  avatarColor  String   @default("#111111")
+  passwordHash String?
+  createdAt    DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  clientMemberships ClientMember[]
+  createdVersions   ContentVersion[] @relation("VersionAuthor")
+  comments          Comment[]
+  activities        Activity[]
+  tasks             Task[]
+  notesAuthored     Note[]
+  assetsUploaded    Asset[]
+
+  @@index([workspaceId])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  industry    String?
+  contactName String?
+  contactEmail String?
+  status      String   @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   ClientMember[]
+  projects  Project[]
+  notes     Note[]
+  assets    Asset[]
+  accounts  PlatformAccount[]
+
+  @@index([workspaceId])
+}
+
+model PlatformAccount {
+  id        String   @id @default(cuid())
+  clientId  String
+  platform  String // INSTAGRAM | LINKEDIN | FACEBOOK | YOUTUBE | X | TIKTOK | WEBSITE | OTHER
+  label     String? // optional human label, e.g. "Main handle"
+  handle    String? // @handle
+  url       String? // profile or login URL
+  username  String? // login username / email
+  secretEnc String? // AES-256-GCM encrypted password/token (never returned in plaintext by list APIs)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+}
+
+model ClientMember {
+  id       String @id @default(cuid())
+  clientId String
+  userId   String
+  role     String // role scoped to this client
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, userId])
+  @@index([userId])
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  clientId    String
+  name        String
+  description String?
+  status      String   @default("PLANNING") // PLANNING | IN_PROGRESS | REVIEW | APPROVED | COMPLETED
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contents Content[]
+  tasks              Task[]
+  notes              Note[]
+  whiteboardElements WhiteboardElement[]
+  assets             Asset[]
+
+  @@index([clientId])
+}
+
+model Content {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  caption     String?
+  platform    String   @default("INSTAGRAM_POST")
+  style       String   @default("STATIC_POST")
+  tags        String?  // comma-separated
+  status      String   @default("DRAFT") // DRAFT | IN_REVIEW | CHANGES_REQUESTED | APPROVED | SCHEDULED | PUBLISHED
+  scheduledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // tokenized public preview
+  previewToken String  @unique @default(cuid())
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions ContentVersion[]
+  comments Comment[]
+
+  @@index([projectId, status])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model ContentVersion {
+  id         String   @id @default(cuid())
+  contentId  String
+  number     Int
+  mediaUrl   String
+  mediaType  String   @default("image") // image | video
+  notes      String?
+  authorId   String
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // format-aware preview metadata
+  width     Int?
+  height    Int?
+  posterUrl String?
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  author  User    @relation("VersionAuthor", fields: [authorId], references: [id])
+  comments Comment[]
+  slides   MediaSlide[]
+
+  @@unique([contentId, number])
+  @@index([contentId])
+}
+
+// Extra ordered slides for carousels (slide 0 lives on ContentVersion.mediaUrl).
+model MediaSlide {
+  id        String @id @default(cuid())
+  versionId String
+  position  Int    @default(1)
+  url       String
+  kind      String @default("image")
+  width     Int?
+  height    Int?
+  posterUrl String?
+
+  version ContentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  contentId  String
+  versionId  String?
+  authorId   String?  // null = external client (by name)
+  authorName String   // display name (handles client-without-account)
+  body       String
+  // pinned annotation (normalized 0..1 fractions of media dimensions)
+  pinX       Float?
+  pinY       Float?
+  resolved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  content Content         @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  version ContentVersion? @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  author  User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([contentId])
+  @@index([versionId])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorId     String?
+  actorName   String
+  verb        String   // human-readable: "uploaded Version 3"
+  entityType  String   // content | project | client | version
+  entityId    String
+  contentId   String?  // for quick content-scoped feeds
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([contentId])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String
+  title      String
+  body       String?
+  href       String?
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model AiSettings {
+  id          String  @id @default(cuid())
+  workspaceId String  @unique
+
+  enabled  Boolean @default(false) // global master switch
+  provider String  @default("GEMINI") // GEMINI | OPENROUTER
+  model    String? // selected model id; null = provider default
+
+  geminiKeyEnc     String? // AES-256-GCM encrypted
+  openrouterKeyEnc String?
+
+  // per-feature switches
+  featCaption    Boolean @default(true)
+  featChecklist  Boolean @default(true)
+  featAnalytics  Boolean @default(true)
+  featHeisenberg Boolean @default(true) // the @heisenberg chat/meeting teammate
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  projectId   String
+  title       String
+  description String?
+  status      String    @default("TODO") // TODO | IN_PROGRESS | REVIEW | DONE
+  position    Int        @default(0)
+  assigneeId  String?
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+model Note {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientId    String?
+  projectId   String?
+  parentId    String?
+  title       String
+  body        String   @default("")
+  authorId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   Note?    @relation("NoteTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Note[]   @relation("NoteTree")
+  author   User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([clientId])
+  @@index([projectId])
+}
+
+model WhiteboardElement {
+  id        String   @id @default(cuid())
+  projectId String
+  kind      String   @default("NOTE") // NOTE | TEXT | RECT | ELLIPSE
+  x         Float
+  y         Float
+  width     Float    @default(180)
+  height    Float    @default(120)
+  text      String   @default("")
+  color     String   @default("#FFE066")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientId    String?
+  projectId   String?
+  name        String
+  url         String
+  mimeType    String
+  size        Int      @default(0)
+  uploaderId  String?
+  createdAt   DateTime @default(now())
+
+  // media metadata (populated by the processing pipeline)
+  kind        String   @default("other") // image | video | audio | doc | other
+  status      String   @default("ready") // ready | processing | failed | archived | restoring
+  width       Int?
+  height      Int?
+  aspectRatio String?  // e.g. "1:1", "9:16"
+  durationSec Float?
+  posterUrl   String?
+  sha256      String?  // content hash for dedupe
+
+  // cold-storage lifecycle: media auto-archives after inactivity to save space,
+  // and can be restored on request.
+  lastAccessedAt DateTime?
+  archivedAt     DateTime?
+  archivePath    String? // server path of the packed archive when status=archived
+
+  client   Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploader User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([sha256])
+}
+
+// ============================================================================
+// Chat + Meetings (Slack-style messaging, calls, and the Heisenberg AI teammate)
+//
+// Cross-entity references (workspaceId, clientId, projectId, authorId, userId)
+// are stored as plain String + @@index, following the Notification precedent,
+// so the core models stay untouched and the module ports to Postgres cleanly.
+// Relations are kept WITHIN the module (Channel -> members/messages/reactions)
+// for cascade-delete integrity.
+// ============================================================================
+
+model Channel {
+  id          String   @id @default(cuid())
+  workspaceId String
+  clientId    String? // optional scope: a client's room
+  projectId   String? // optional scope: a project's room
+  kind        String   @default("CHANNEL") // CHANNEL | DM
+  name        String
+  topic       String?
+  isPrivate   Boolean  @default(false) // private = only listed members; false = all team can join
+  archived    Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  ChannelMember[]
+  messages Message[]
+  meetings Meeting[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([clientId])
+}
+
+model ChannelMember {
+  id         String    @id @default(cuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id          String    @id @default(cuid())
+  channelId   String
+  parentId    String? // thread root (null = top-level message)
+  authorId    String? // null = Heisenberg / system
+  authorName  String
+  authorKind  String    @default("USER") // USER | ASSISTANT | SYSTEM
+  authorColor String    @default("#111111")
+  body        String
+  mentions    String? // comma-separated userIds mentioned (+ "heisenberg")
+  createdAt   DateTime  @default(now())
+  editedAt    DateTime?
+
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  parent    Message?          @relation("Thread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Message[]         @relation("Thread")
+  reactions MessageReaction[]
+
+  @@index([channelId, createdAt])
+  @@index([parentId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model Meeting {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  channelId     String?
+  projectId     String?
+  clientId      String?
+  roomName      String    @unique
+  title         String
+  status        String    @default("SCHEDULED") // SCHEDULED | LIVE | ENDED
+  createdById   String?
+  createdByName String    @default("")
+  startedAt     DateTime?
+  endedAt       DateTime?
+  transcript    String? // full transcript (JSON lines: {speaker,text,ts})
+  minutes       String? // AI-generated minutes of meeting (markdown)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([status])
+}

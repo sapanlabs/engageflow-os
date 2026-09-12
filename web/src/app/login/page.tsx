@@ -1,0 +1,93 @@
+import { redirect } from "next/navigation";
+import { login } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { Button } from "@/components/ui";
+import { ROLE_LABELS } from "@/lib/constants";
+
+async function loginAction(formData: FormData) {
+  "use server";
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+  const next = String(formData.get("next") || "/dashboard");
+  const user = await login(email, password);
+  if (!user) redirect(`/login?error=invalid`);
+  redirect(user.role === "CLIENT" ? "/login?error=clients-use-preview-links" : next);
+}
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; error?: string }>;
+}) {
+  const { next, error } = await searchParams;
+  // Note: redirecting already-authed users is handled by the proxy (single
+  // source of truth) to avoid Edge/Node disagreement loops.
+
+  // Demo helper: list internal users so the local app is easy to sign into.
+  const demoUsers = await db.user.findMany({
+    where: { role: { not: "CLIENT" } },
+    select: { email: true, name: true, role: true },
+    orderBy: { name: "asc" },
+  });
+
+  const errorText =
+    error === "invalid"
+      ? "That email or password did not match."
+      : error === "clients-use-preview-links"
+        ? "Clients review work through their preview links, not the internal app."
+        : null;
+
+  return (
+    <div className="flex min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <p className="font-display text-3xl tracking-tight">EngageFlow</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">Sign in to the studio workspace.</p>
+
+        {errorText && (
+          <p className="mt-4 rounded-[var(--radius-input)] border border-[#C0442E]/30 bg-[#C0442E]/10 px-3 py-2 text-sm text-[#C0442E]">
+            {errorText}
+          </p>
+        )}
+
+        <form action={loginAction} className="mt-6 flex flex-col gap-3">
+          <input type="hidden" name="next" value={next ?? "/dashboard"} />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Email</label>
+            <input
+              name="email"
+              type="email"
+              required
+              defaultValue={demoUsers[0]?.email}
+              className="w-full rounded-[var(--radius-input)] border bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--fg)]/40"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Password</label>
+            <input
+              name="password"
+              type="password"
+              required
+              defaultValue="demo1234"
+              className="w-full rounded-[var(--radius-input)] border bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--fg)]/40"
+            />
+          </div>
+          <Button type="submit" className="mt-1 w-full">Sign in</Button>
+        </form>
+
+        <div className="mt-6 rounded-[var(--radius-card)] border bg-[var(--surface)] p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Demo accounts · password demo1234
+          </p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {demoUsers.map((u) => (
+              <li key={u.email} className="flex justify-between">
+                <span className="text-[var(--muted)]">{ROLE_LABELS[u.role]}</span>
+                <span className="font-mono text-xs">{u.email}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
