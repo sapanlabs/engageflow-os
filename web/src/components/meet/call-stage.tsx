@@ -12,20 +12,26 @@ import {
 import { cn } from "@/lib/utils";
 import {
   MicIcon, MicOffIcon, CamIcon, CamOffIcon, ScreenIcon, CaptionsIcon,
-  PeopleIcon, SettingsIcon, CopyIcon, LeaveIcon, GridIcon, SpotlightIcon,
+  PeopleIcon, SettingsIcon, CopyIcon, LeaveIcon, GridIcon, SpotlightIcon, ChatIcon,
 } from "@/components/meet/icons";
 import type { TranscriptLine } from "@/components/meet/types";
+import { DEFAULT_AUDIO_CONSTRAINTS } from "@/lib/use-media-permissions";
+import { ChatPanel, type ChatMessage } from "@/components/meet/chat-panel";
 
 type Layout = "grid" | "spotlight";
 
 export function CallStage({
   meetingId,
   meName,
+  initialMicOn = true,
+  initialCamOn = true,
   onCaption,
   onLeave,
 }: {
   meetingId: string;
   meName: string;
+  initialMicOn?: boolean;
+  initialCamOn?: boolean;
   onCaption: (line: TranscriptLine) => void;
   onLeave: () => void;
 }) {
@@ -35,18 +41,31 @@ export function CallStage({
   const [reconnecting, setReconnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
+  const [micOn, setMicOn] = useState(initialMicOn);
+  const [camOn, setCamOn] = useState(initialCamOn);
   const [sharing, setSharing] = useState(false);
   const [captionsOn, setCaptionsOn] = useState(true);
   const [layout, setLayout] = useState<Layout>("grid");
   const [showPeople, setShowPeople] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [unreadChat, setUnreadChat] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [speaking, setSpeaking] = useState<Set<string>>(new Set());
   const [elapsed, setElapsed] = useState(0);
   const joinedAt = useRef<number | null>(null);
+
+  const showChatRef = useRef(showChat);
+  useEffect(() => {
+    showChatRef.current = showChat;
+  }, [showChat]);
+
+  const onLeaveRef = useRef(onLeave);
+  useEffect(() => {
+    onLeaveRef.current = onLeave;
+  }, [onLeave]);
 
   // --- connect ---
   useEffect(() => {
@@ -67,13 +86,35 @@ export function CallStage({
       .on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         setSpeaking(new Set(speakers.map((s) => s.sid)));
       })
+      .on(RoomEvent.DataReceived, (payload: Uint8Array, participant?: Participant, _kind?: unknown, topic?: string) => {
+        if (!topic || topic === "chat") {
+          try {
+            const str = new TextDecoder().decode(payload);
+            const data = JSON.parse(str);
+            if (data && data.text) {
+              const msg: ChatMessage = {
+                id: data.id || String(Date.now() + Math.random()),
+                senderName: participant?.name || participant?.identity || data.senderName || "Participant",
+                senderSid: participant?.sid,
+                text: data.text,
+                timestamp: data.timestamp || Date.now(),
+                isLocal: false,
+              };
+              setChatMessages((prev) => [...prev, msg]);
+              if (!showChatRef.current) {
+                setUnreadChat((u) => u + 1);
+              }
+            }
+          } catch { /* ignore non-JSON */ }
+        }
+      })
       .on(RoomEvent.Reconnecting, () => setReconnecting(true))
       .on(RoomEvent.Reconnected, () => setReconnecting(false))
       .on(RoomEvent.ConnectionStateChanged, (s: ConnectionState) => {
         setReconnecting(s === ConnectionState.Reconnecting);
       })
       .on(RoomEvent.Disconnected, () => {
-        if (!cancelled) onLeave();
+        if (!cancelled) onLeaveRef.current();
       });
 
     (async () => {
@@ -86,8 +127,31 @@ export function CallStage({
         const { data } = await res.json();
         await room.connect(data.url, data.token);
         if (cancelled) return;
-        await room.localParticipant.setCameraEnabled(true);
-        await room.localParticipant.setMicrophoneEnabled(true);
+
+        if (initialCamOn) {
+          try {
+            await room.localParticipant.setCameraEnabled(true);
+            setCamOn(true);
+          } catch {
+            setCamOn(false);
+          }
+        } else {
+          setCamOn(false);
+        }
+
+        try {
+          await room.localParticipant.setMicrophoneEnabled(true, DEFAULT_AUDIO_CONSTRAINTS);
+          const micPub = Array.from(room.localParticipant.trackPublications.values()).find(
+            (pub) => pub.source === Track.Source.Microphone
+          );
+          if (!initialMicOn && micPub) {
+            await micPub.mute();
+          }
+          setMicOn(initialMicOn);
+        } catch {
+          setMicOn(false);
+        }
+
         joinedAt.current = Date.now();
         setStatus("connected");
         rerender();
@@ -100,10 +164,13 @@ export function CallStage({
 
     return () => {
       cancelled = true;
-      room.disconnect();
-      roomRef.current = null;
+      const r = roomRef.current;
+      if (r) {
+        stopAndDisconnect(r);
+        roomRef.current = null;
+      }
     };
-  }, [meetingId, onLeave]);
+  }, [meetingId]);
 
   // --- meeting timer ---
   useEffect(() => {
@@ -144,17 +211,49 @@ export function CallStage({
   async function toggleMic() {
     const p = roomRef.current?.localParticipant;
     if (!p) return;
-    const next = !micOn;
-    await p.setMicrophoneEnabled(next);
-    setMicOn(next);
+    const micPub = Array.from(p.trackPublications.values()).find(
+      (pub) => pub.source === Track.Source.Microphone
+    );
+
+    if (micPub) {
+      if (micOn) {
+        await micPub.mute();
+        setMicOn(false);
+      } else {
+        await micPub.unmute();
+        setMicOn(true);
+      }
+    } else {
+      try {
+        await p.setMicrophoneEnabled(true, DEFAULT_AUDIO_CONSTRAINTS);
+        setMicOn(true);
+      } catch { /* noop */ }
+    }
   }
+
   async function toggleCam() {
     const p = roomRef.current?.localParticipant;
     if (!p) return;
-    const next = !camOn;
-    await p.setCameraEnabled(next);
-    setCamOn(next);
+    const camPub = Array.from(p.trackPublications.values()).find(
+      (pub) => pub.source === Track.Source.Camera
+    );
+
+    if (camPub) {
+      if (camOn) {
+        await camPub.mute();
+        setCamOn(false);
+      } else {
+        await camPub.unmute();
+        setCamOn(true);
+      }
+    } else {
+      try {
+        await p.setCameraEnabled(true);
+        setCamOn(true);
+      } catch { /* noop */ }
+    }
   }
+
   async function toggleShare() {
     const p = roomRef.current?.localParticipant;
     if (!p) return;
@@ -165,10 +264,52 @@ export function CallStage({
       if (next) setLayout("spotlight");
     } catch { /* user cancelled */ }
   }
+
+  function handleSendMessage(text: string) {
+    const r = roomRef.current;
+    const local = r?.localParticipant;
+    const msgObj = {
+      id: String(Date.now() + Math.random()),
+      senderName: meName,
+      text,
+      timestamp: Date.now(),
+    };
+    if (local) {
+      try {
+        const data = new TextEncoder().encode(JSON.stringify(msgObj));
+        local.publishData(data, { topic: "chat", reliable: true });
+      } catch { /* ignore */ }
+    }
+    setChatMessages((prev) => [...prev, { ...msgObj, isLocal: true }]);
+  }
+
+  function togglePeople() {
+    setShowPeople((prev) => {
+      const next = !prev;
+      if (next) setShowChat(false);
+      return next;
+    });
+  }
+
+  function toggleChat() {
+    setShowChat((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowPeople(false);
+        setUnreadChat(0);
+      }
+      return next;
+    });
+  }
+
   async function leave() {
     await fetch(`/api/meetings/${meetingId}/end`, { method: "POST" }).catch(() => {});
-    roomRef.current?.disconnect();
-    onLeave();
+    const r = roomRef.current;
+    if (r) {
+      await stopAndDisconnect(r);
+      roomRef.current = null;
+    }
+    onLeaveRef.current();
   }
   function copyLink() {
     navigator.clipboard?.writeText(window.location.href).then(() => {
@@ -248,6 +389,7 @@ export function CallStage({
         </div>
 
         {showPeople && <PeoplePanel participants={participants} localSid={room?.localParticipant.sid} onClose={() => setShowPeople(false)} />}
+        {showChat && <ChatPanel messages={chatMessages} onSendMessage={handleSendMessage} onClose={() => setShowChat(false)} />}
       </div>
 
       {/* controls */}
@@ -264,9 +406,19 @@ export function CallStage({
         <Control on={captionsOn} onClick={() => setCaptionsOn((c) => !c)} label={captionsOn ? "Captions on" : "Captions off"}>
           <CaptionsIcon />
         </Control>
-        <Control on={showPeople} onClick={() => setShowPeople((p) => !p)} label="Participants">
+        <Control on={showPeople} onClick={togglePeople} label="Participants">
           <PeopleIcon />
         </Control>
+        <div className="relative">
+          <Control on={showChat} onClick={toggleChat} label="In-call chat">
+            <ChatIcon />
+          </Control>
+          {unreadChat > 0 && !showChat && (
+            <span className="pointer-events-none absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#C0442E] px-1 text-[10px] font-bold text-white shadow-sm">
+              {unreadChat}
+            </span>
+          )}
+        </div>
         <div className="relative">
           <Control on={showSettings} onClick={() => setShowSettings((s) => !s)} label="Devices">
             <SettingsIcon />
@@ -274,6 +426,7 @@ export function CallStage({
           {showSettings && <DeviceSettings room={room} onClose={() => setShowSettings(false)} />}
         </div>
         <button
+          type="button"
           onClick={leave}
           className="ml-2 inline-flex items-center gap-2 rounded-full bg-[#C0442E] px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
         >
@@ -285,6 +438,28 @@ export function CallStage({
 }
 
 // ---- helpers ----
+function stopAndDisconnect(room: Room | null) {
+  if (!room) return;
+  try {
+    const local = room.localParticipant;
+    if (local) {
+      const pubs = Array.from(local.trackPublications.values());
+      for (const pub of pubs) {
+        if (pub.track) {
+          try {
+            pub.track.stop();
+          } catch { /* ignore */ }
+        }
+      }
+      local.setCameraEnabled(false).catch(() => {});
+      local.setMicrophoneEnabled(false).catch(() => {});
+      local.setScreenShareEnabled(false).catch(() => {});
+    }
+  } catch { /* ignore */ }
+  try {
+    room.disconnect();
+  } catch { /* ignore */ }
+}
 function publicationBySource(p: Participant, source: Track.Source): TrackPublication | undefined {
   return Array.from(p.trackPublications.values()).find((pub) => pub.source === source && !!pub.track);
 }
@@ -354,42 +529,59 @@ function ParticipantTile({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [hasVideo, setHasVideo] = useState(false);
+
+  const pubs = participant ? (Array.from(participant.trackPublications.values()) as TrackPublication[]) : [];
+  const vidPub = pubs.find((p) => p.source === source && p.track);
+  const micPub = pubs.find((p) => p.source === Track.Source.Microphone && p.track);
+  const isLocal = participant?.isLocal ?? false;
+
+  const hasVideo = !!(vidPub?.track && !vidPub.isMuted);
 
   useEffect(() => {
     if (!participant) return;
-    const pubs = Array.from(participant.trackPublications.values()) as TrackPublication[];
-    const vidPub = pubs.find((p) => p.source === source && p.track);
-    const micPub = pubs.find((p) => p.source === Track.Source.Microphone && p.track);
-    const isLocal = participant.isLocal;
+    const videoEl = videoRef.current;
+    const audioEl = audioRef.current;
 
-    if (vidPub?.track && videoRef.current) {
-      vidPub.track.attach(videoRef.current);
-      setHasVideo(!vidPub.isMuted);
-    } else {
-      setHasVideo(false);
+    if (vidPub?.track && videoEl) {
+      vidPub.track.attach(videoEl);
     }
-    if (micPub?.track && audioRef.current && !isLocal) micPub.track.attach(audioRef.current);
+    if (micPub?.track && audioEl && !isLocal) {
+      micPub.track.attach(audioEl);
+    }
+
     return () => {
-      vidPub?.track?.detach();
-      micPub?.track?.detach();
+      if (vidPub?.track && videoEl) {
+        try {
+          vidPub.track.detach(videoEl);
+        } catch { /* ignore */ }
+      }
+      if (micPub?.track && audioEl) {
+        try {
+          micPub.track.detach(audioEl);
+        } catch { /* ignore */ }
+      }
     };
-  });
+  }, [participant, source, vidPub?.track?.sid, micPub?.track?.sid, isLocal]);
 
   if (!participant) return <div className="h-full w-full rounded-[var(--radius-card)] border bg-[#0A0A0A]" />;
 
-  const isLocal = participant.isLocal;
   const name = (participant.name || participant.identity || "?") + (isLocal ? " (you)" : "");
   const micEnabled = participant.isMicrophoneEnabled;
 
   return (
     <div
       className={cn(
-        "relative h-full w-full overflow-hidden rounded-[var(--radius-card)] border bg-[#0A0A0A] ring-2 transition",
+        "relative h-full w-full overflow-hidden rounded-[var(--radius-card)] border bg-[#0A0A0A] ring-2 transition-all duration-200",
         speaking ? "ring-[#2E7D4F]" : "ring-transparent",
       )}
     >
-      <video ref={videoRef} autoPlay playsInline muted={isLocal || source === Track.Source.ScreenShare} className={cn("h-full w-full", source === Track.Source.ScreenShare ? "object-contain" : "object-cover", hasVideo ? "block" : "hidden")} />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal || source === Track.Source.ScreenShare}
+        className={cn("h-full w-full", source === Track.Source.ScreenShare ? "object-contain" : "object-cover", hasVideo ? "block" : "hidden")}
+      />
       {!hasVideo && (
         <div className="flex h-full min-h-[120px] w-full items-center justify-center">
           <span
