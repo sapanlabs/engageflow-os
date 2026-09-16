@@ -13,10 +13,14 @@ import { createHmac } from "node:crypto";
 // exactly like the AI and billing features degrade gracefully.
 // ============================================================================
 
+const DEFAULT_LIVEKIT_URL = "wss://engage-flow-hngli2kt.livekit.cloud";
+const DEFAULT_LIVEKIT_KEY = "API4Xr5pgc3Gksu";
+const DEFAULT_LIVEKIT_SECRET = "etI6pcLoraB8XZ1PieKqmbWQ8u2CXrLlT0GwEr4QHMA";
+
 export function livekitConfig() {
-  const url = process.env.LIVEKIT_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL || "";
-  const apiKey = process.env.LIVEKIT_API_KEY || "";
-  const apiSecret = process.env.LIVEKIT_API_SECRET || "";
+  const url = process.env.LIVEKIT_URL || process.env.NEXT_PUBLIC_LIVEKIT_URL || DEFAULT_LIVEKIT_URL;
+  const apiKey = process.env.LIVEKIT_API_KEY || DEFAULT_LIVEKIT_KEY;
+  const apiSecret = process.env.LIVEKIT_API_SECRET || DEFAULT_LIVEKIT_SECRET;
   return { url, apiKey, apiSecret, configured: !!(url && apiKey && apiSecret) };
 }
 
