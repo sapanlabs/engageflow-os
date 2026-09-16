@@ -20,15 +20,6 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const { next, error } = await searchParams;
-  // Note: redirecting already-authed users is handled by the proxy (single
-  // source of truth) to avoid Edge/Node disagreement loops.
-
-  // Demo helper: list internal users so the local app is easy to sign into.
-  const demoUsers = await db.user.findMany({
-    where: { role: { not: "CLIENT" } },
-    select: { email: true, name: true, role: true },
-    orderBy: { name: "asc" },
-  });
 
   const errorText =
     error === "invalid"
@@ -71,20 +62,6 @@ export default async function LoginPage({
           </div>
           <Button type="submit" className="mt-1 w-full">Sign in</Button>
         </form>
-
-        <div className="mt-6 rounded-[var(--radius-card)] border bg-[var(--surface)] p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Demo workspace accounts
-          </p>
-          <ul className="mt-2 space-y-1 text-sm">
-            {demoUsers.map((u) => (
-              <li key={u.email} className="flex justify-between">
-                <span className="text-[var(--muted)]">{ROLE_LABELS[u.role]}</span>
-                <span className="font-mono text-xs">{u.email}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </div>
   );

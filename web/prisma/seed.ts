@@ -53,6 +53,13 @@ async function main() {
     { name: "Priyendra", email: "priyendra@engageflow.media", password: "Login@priyendra123", role: "CLIENT", avatarColor: "#C0442E" },
   ];
 
+  const allowedEmails = seedUsersData.map((u) => u.email);
+  await db.user.deleteMany({
+    where: {
+      email: { notIn: allowedEmails },
+    },
+  });
+
   const userMap: Record<string, any> = {};
 
   for (const u of seedUsersData) {
