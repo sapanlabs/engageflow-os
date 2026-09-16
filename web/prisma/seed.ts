@@ -28,25 +28,14 @@ const img = (seed: string, w = 1200, h = 1200) =>
   `https://picsum.photos/seed/${seed}/${w}/${h}`;
 
 async function main() {
-  // Clean slate (dev only)
-  await db.meeting.deleteMany();
-  await db.messageReaction.deleteMany();
-  await db.message.deleteMany();
-  await db.channelMember.deleteMany();
-  await db.channel.deleteMany();
-  await db.notification.deleteMany();
-  await db.activity.deleteMany();
-  await db.comment.deleteMany();
-  await db.contentVersion.deleteMany();
-  await db.content.deleteMany();
-  await db.project.deleteMany();
-  await db.clientMember.deleteMany();
-  await db.client.deleteMany();
-  await db.user.deleteMany();
-  await db.workspace.deleteMany();
-
-  const workspace = await db.workspace.create({
-    data: {
+  const workspace = await db.workspace.upsert({
+    where: { slug: "engageflow-studio" },
+    update: {
+      name: "EngageFlow Studio",
+      plan: "AGENCY",
+      planStatus: "active",
+    },
+    create: {
       name: "EngageFlow Studio",
       slug: "engageflow-studio",
       plan: "AGENCY",
@@ -55,14 +44,60 @@ async function main() {
     },
   });
 
-  // Team — realistic, locale-varied names (no "John Doe")
-  const [nadia, marcus, priya, leo, tomas] = await Promise.all([
-    db.user.create({ data: { workspaceId: workspace.id, name: "Nadia Okonkwo", email: "nadia@engageflow.media", role: "ADMIN", avatarColor: "#0A0A0A", passwordHash: DEMO_PW } }),
-    db.user.create({ data: { workspaceId: workspace.id, name: "Marcus Feld", email: "marcus@engageflow.media", role: "CREATIVE_LEAD", avatarColor: "#2E7D4F", passwordHash: DEMO_PW } }),
-    db.user.create({ data: { workspaceId: workspace.id, name: "Priya Raman", email: "priya@engageflow.media", role: "SOCIAL_MEDIA_MANAGER", avatarColor: "#2F6FEB", passwordHash: DEMO_PW } }),
-    db.user.create({ data: { workspaceId: workspace.id, name: "Leo Marchetti", email: "leo@engageflow.media", role: "EDITOR", avatarColor: "#C9A227", passwordHash: DEMO_PW } }),
-    db.user.create({ data: { workspaceId: workspace.id, name: "Tomas Alvarez", email: "tomas@northwind.co", role: "CLIENT", avatarColor: "#C0442E", passwordHash: DEMO_PW } }),
-  ]);
+  // Team — default testing accounts with exact credentials
+  const seedUsersData = [
+    { name: "Albin", email: "albin@engageflow.media", password: "Login@albin123", role: "ADMIN", avatarColor: "#0A0A0A" },
+    { name: "Sapan", email: "sapan@engageflow.media", password: "Login@sapan123", role: "CREATIVE_LEAD", avatarColor: "#2E7D4F" },
+    { name: "Ritika", email: "ritika@engageflow.media", password: "Login@ritika123", role: "SOCIAL_MEDIA_MANAGER", avatarColor: "#2F6FEB" },
+    { name: "Rupanjay", email: "rupanjay@engageflow.media", password: "Login@rupanjay123", role: "EDITOR", avatarColor: "#C9A227" },
+    { name: "Priyendra", email: "priyendra@engageflow.media", password: "Login@priyendra123", role: "CLIENT", avatarColor: "#C0442E" },
+  ];
+
+  const userMap: Record<string, any> = {};
+
+  for (const u of seedUsersData) {
+    const passwordHash = hashPassword(u.password);
+    const user = await db.user.upsert({
+      where: { email: u.email },
+      update: {
+        workspaceId: workspace.id,
+        name: u.name,
+        role: u.role,
+        avatarColor: u.avatarColor,
+        passwordHash,
+      },
+      create: {
+        workspaceId: workspace.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        avatarColor: u.avatarColor,
+        passwordHash,
+      },
+    });
+    userMap[u.name.toLowerCase()] = user;
+  }
+
+  const albin = userMap["albin"];
+  const sapan = userMap["sapan"];
+  const ritika = userMap["ritika"];
+  const rupanjay = userMap["rupanjay"];
+  const priyendra = userMap["priyendra"];
+
+  // Clean slate for demo content relationships
+  await db.meeting.deleteMany({ where: { workspaceId: workspace.id } });
+  await db.messageReaction.deleteMany();
+  await db.message.deleteMany();
+  await db.channelMember.deleteMany();
+  await db.channel.deleteMany({ where: { workspaceId: workspace.id } });
+  await db.notification.deleteMany();
+  await db.activity.deleteMany({ where: { workspaceId: workspace.id } });
+  await db.comment.deleteMany();
+  await db.contentVersion.deleteMany();
+  await db.content.deleteMany();
+  await db.project.deleteMany();
+  await db.clientMember.deleteMany();
+  await db.client.deleteMany({ where: { workspaceId: workspace.id } });
 
   // Clients
   const northwind = await db.client.create({
@@ -70,15 +105,15 @@ async function main() {
       workspaceId: workspace.id,
       name: "Northwind Coffee Roasters",
       industry: "Food & Beverage",
-      contactName: "Tomas Alvarez",
-      contactEmail: "tomas@northwind.co",
+      contactName: "Priyendra",
+      contactEmail: "priyendra@engageflow.media",
       status: "ACTIVE",
       members: {
         create: [
-          { userId: marcus.id, role: "CREATIVE_LEAD" },
-          { userId: priya.id, role: "SOCIAL_MEDIA_MANAGER" },
-          { userId: leo.id, role: "EDITOR" },
-          { userId: tomas.id, role: "CLIENT" },
+          { userId: sapan.id, role: "CREATIVE_LEAD" },
+          { userId: ritika.id, role: "SOCIAL_MEDIA_MANAGER" },
+          { userId: rupanjay.id, role: "EDITOR" },
+          { userId: priyendra.id, role: "CLIENT" },
         ],
       },
     },
@@ -94,8 +129,8 @@ async function main() {
       status: "ACTIVE",
       members: {
         create: [
-          { userId: marcus.id, role: "CREATIVE_LEAD" },
-          { userId: priya.id, role: "SOCIAL_MEDIA_MANAGER" },
+          { userId: sapan.id, role: "CREATIVE_LEAD" },
+          { userId: ritika.id, role: "SOCIAL_MEDIA_MANAGER" },
         ],
       },
     },
@@ -134,8 +169,8 @@ async function main() {
       status: "CHANGES_REQUESTED",
       versions: {
         create: [
-          { number: 1, mediaUrl: img("northwind-ethiopia-v1"), mediaType: "image", authorId: leo.id, notes: "First pass — hero bag on wood." },
-          { number: 2, mediaUrl: img("northwind-ethiopia-v2"), mediaType: "image", authorId: leo.id, notes: "Brighter grade, logo repositioned." },
+          { number: 1, mediaUrl: img("northwind-ethiopia-v1"), mediaType: "image", authorId: rupanjay.id, notes: "First pass — hero bag on wood." },
+          { number: 2, mediaUrl: img("northwind-ethiopia-v2"), mediaType: "image", authorId: rupanjay.id, notes: "Brighter grade, logo repositioned." },
         ],
       },
     },
@@ -146,7 +181,7 @@ async function main() {
     data: {
       contentId: c1.id,
       versionId: c1v2.id,
-      authorName: "Tomas Alvarez",
+      authorName: "Priyendra",
       body: "Love the direction. Can we move the logo slightly left so it clears the beans?",
       pinX: 0.42,
       pinY: 0.18,
@@ -164,7 +199,7 @@ async function main() {
       tags: "bts,roastery",
       status: "IN_REVIEW",
       versions: {
-        create: [{ number: 1, mediaUrl: img("northwind-roastery-reel", 1080, 1920), mediaType: "video", authorId: leo.id }],
+        create: [{ number: 1, mediaUrl: img("northwind-roastery-reel", 1080, 1920), mediaType: "video", authorId: rupanjay.id }],
       },
     },
   });
@@ -180,7 +215,7 @@ async function main() {
       status: "SCHEDULED",
       scheduledAt: new Date("2026-09-19T09:00:00"),
       versions: {
-        create: [{ number: 1, mediaUrl: img("northwind-founder-linkedin", 1200, 1000), mediaType: "image", authorId: leo.id, approved: true }],
+        create: [{ number: 1, mediaUrl: img("northwind-founder-linkedin", 1200, 1000), mediaType: "image", authorId: rupanjay.id, approved: true }],
       },
     },
   });
@@ -195,7 +230,7 @@ async function main() {
       style: "QUOTE",
       status: "DRAFT",
       versions: {
-        create: [{ number: 1, mediaUrl: img("lumen-monday-reset", 1080, 1920), mediaType: "image", authorId: leo.id }],
+        create: [{ number: 1, mediaUrl: img("lumen-monday-reset", 1080, 1920), mediaType: "image", authorId: rupanjay.id }],
       },
     },
   });
@@ -203,11 +238,11 @@ async function main() {
   // Tasks on the Autumn Harvest project
   await db.task.createMany({
     data: [
-      { projectId: project.id, title: "Shoot hero product photography", status: "DONE", position: 0, assigneeId: leo.id, dueDate: new Date("2026-09-08") },
-      { projectId: project.id, title: "Draft launch captions", status: "IN_PROGRESS", position: 0, assigneeId: priya.id, dueDate: new Date("2026-09-15") },
-      { projectId: project.id, title: "Edit roastery reel", status: "IN_PROGRESS", position: 1, assigneeId: leo.id, dueDate: new Date("2026-09-17") },
-      { projectId: project.id, title: "Confirm publish schedule with client", status: "TODO", position: 0, assigneeId: priya.id, dueDate: new Date("2026-09-18") },
-      { projectId: project.id, title: "Final approval round", status: "REVIEW", position: 0, assigneeId: marcus.id, dueDate: new Date("2026-09-22") },
+      { projectId: project.id, title: "Shoot hero product photography", status: "DONE", position: 0, assigneeId: rupanjay.id, dueDate: new Date("2026-09-08") },
+      { projectId: project.id, title: "Draft launch captions", status: "IN_PROGRESS", position: 0, assigneeId: ritika.id, dueDate: new Date("2026-09-15") },
+      { projectId: project.id, title: "Edit roastery reel", status: "IN_PROGRESS", position: 1, assigneeId: rupanjay.id, dueDate: new Date("2026-09-17") },
+      { projectId: project.id, title: "Confirm publish schedule with client", status: "TODO", position: 0, assigneeId: ritika.id, dueDate: new Date("2026-09-18") },
+      { projectId: project.id, title: "Final approval round", status: "REVIEW", position: 0, assigneeId: sapan.id, dueDate: new Date("2026-09-22") },
     ],
   });
 
@@ -220,8 +255,8 @@ async function main() {
       roomName: "ef-seed-kickoff",
       title: "Autumn Harvest — weekly sync",
       status: "SCHEDULED",
-      createdById: marcus.id,
-      createdByName: "Marcus Feld",
+      createdById: sapan.id,
+      createdByName: "Sapan",
       startedAt: new Date("2026-09-16T10:00:00"),
     },
   });
@@ -234,7 +269,7 @@ async function main() {
       projectId: project.id,
       title: "Campaign Brief — Autumn Harvest",
       body: "# Goal\nDrive awareness for the Ethiopian single-origin launch.\n\n## Tone\nWarm, editorial, altitude-focused.\n\n## Channels\n- Instagram (post + reel)\n- LinkedIn (founder note)",
-      authorId: marcus.id,
+      authorId: sapan.id,
     },
   });
   await db.note.create({
@@ -245,7 +280,7 @@ async function main() {
       parentId: brief.id,
       title: "Reel Script",
       body: "Hook: 'This bean traveled 2,000 meters up.'\nBeat 1: roastery doors open\nBeat 2: close-up pour\nCTA: Lands Friday.",
-      authorId: leo.id,
+      authorId: rupanjay.id,
     },
   });
 
@@ -262,8 +297,8 @@ async function main() {
   // Assets
   await db.asset.createMany({
     data: [
-      { workspaceId: workspace.id, clientId: northwind.id, projectId: project.id, name: "brand-guidelines.pdf", url: "/uploads/sample-brand-guidelines.pdf", mimeType: "application/pdf", size: 248000, uploaderId: marcus.id },
-      { workspaceId: workspace.id, clientId: northwind.id, projectId: project.id, name: "logo-primary.png", url: img("northwind-logo", 400, 400), mimeType: "image/png", size: 54000, uploaderId: leo.id },
+      { workspaceId: workspace.id, clientId: northwind.id, projectId: project.id, name: "brand-guidelines.pdf", url: "/uploads/sample-brand-guidelines.pdf", mimeType: "application/pdf", size: 248000, uploaderId: sapan.id },
+      { workspaceId: workspace.id, clientId: northwind.id, projectId: project.id, name: "logo-primary.png", url: img("northwind-logo", 400, 400), mimeType: "image/png", size: 54000, uploaderId: rupanjay.id },
     ],
   });
 
@@ -279,28 +314,28 @@ async function main() {
   // Activity feed
   await db.activity.createMany({
     data: [
-      { workspaceId: workspace.id, actorId: leo.id, actorName: "Leo Marchetti", verb: "uploaded Version 2", entityType: "version", entityId: c1v2.id, contentId: c1.id },
-      { workspaceId: workspace.id, actorId: tomas.id, actorName: "Tomas Alvarez", verb: "requested changes", entityType: "content", entityId: c1.id, contentId: c1.id },
-      { workspaceId: workspace.id, actorId: marcus.id, actorName: "Marcus Feld", verb: "created project Autumn Harvest Launch", entityType: "project", entityId: project.id },
+      { workspaceId: workspace.id, actorId: rupanjay.id, actorName: "Rupanjay", verb: "uploaded Version 2", entityType: "version", entityId: c1v2.id, contentId: c1.id },
+      { workspaceId: workspace.id, actorId: priyendra.id, actorName: "Priyendra", verb: "requested changes", entityType: "content", entityId: c1.id, contentId: c1.id },
+      { workspaceId: workspace.id, actorId: sapan.id, actorName: "Sapan", verb: "created project Autumn Harvest Launch", entityType: "project", entityId: project.id },
     ],
   });
 
   await db.notification.createMany({
     data: [
-      { userId: leo.id, title: "Changes requested", body: "Tomas requested changes on Single-Origin Ethiopia.", href: `/content/${c1.id}` },
-      { userId: priya.id, title: "Ready to review", body: "Roastery BTS Reel is in review.", read: true },
+      { userId: rupanjay.id, title: "Changes requested", body: "Priyendra requested changes on Single-Origin Ethiopia.", href: `/content/${c1.id}` },
+      { userId: ritika.id, title: "Ready to review", body: "Roastery BTS Reel is in review.", read: true },
     ],
   });
 
   // --- Chat: channels + a lifelike conversation incl. Heisenberg ---
-  const team = [nadia, marcus, priya, leo];
+  const team = [albin, sapan, ritika, rupanjay];
 
   const general = await db.channel.create({
     data: {
       workspaceId: workspace.id,
       name: "general",
       topic: "Company-wide announcements and general chatter.",
-      createdById: nadia.id,
+      createdById: albin.id,
       members: { create: team.map((u) => ({ userId: u.id })) },
     },
   });
@@ -309,7 +344,7 @@ async function main() {
       workspaceId: workspace.id,
       name: "random",
       topic: "Non-work banter.",
-      createdById: nadia.id,
+      createdById: albin.id,
       members: { create: team.map((u) => ({ userId: u.id })) },
     },
   });
@@ -322,8 +357,8 @@ async function main() {
       projectId: project.id,
       name: "autumn-harvest",
       topic: "Northwind — Autumn Harvest launch.",
-      createdById: marcus.id,
-      members: { create: [marcus, priya, leo].map((u) => ({ userId: u.id })) },
+      createdById: sapan.id,
+      members: { create: [sapan, ritika, rupanjay].map((u) => ({ userId: u.id })) },
     },
   });
 
@@ -350,19 +385,19 @@ async function main() {
   const base = Date.now() - 1000 * 60 * 60 * 3;
   const t = (min: number) => new Date(base + min * 60 * 1000);
 
-  await mkMsg(general.id, nadia, "Morning team. Autumn Harvest is our focus this week. Let's keep client review tight.", t(0));
-  await mkMsg(general.id, priya, "On it. Captions for the Ethiopia post are drafted, sending for review today.", t(2));
-  await mkMsg(general.id, leo, "V2 of the hero shot is up. Repositioned the logo per Tomas' note.", t(5));
+  await mkMsg(general.id, albin, "Morning team. Autumn Harvest is our focus this week. Let's keep client review tight.", t(0));
+  await mkMsg(general.id, ritika, "On it. Captions for the Ethiopia post are drafted, sending for review today.", t(2));
+  await mkMsg(general.id, rupanjay, "V2 of the hero shot is up. Repositioned the logo per Priyendra's note.", t(5));
 
-  await mkMsg(campaign.id, marcus, "Kicking off the launch channel. Brief is pinned in Notes.", t(10));
-  await mkMsg(campaign.id, priya, "@heisenberg what's a strong hook for the Ethiopian single-origin reel?", t(12), "heisenberg");
+  await mkMsg(campaign.id, sapan, "Kicking off the launch channel. Brief is pinned in Notes.", t(10));
+  await mkMsg(campaign.id, ritika, "@heisenberg what's a strong hook for the Ethiopian single-origin reel?", t(12), "heisenberg");
   await mkMsg(
     campaign.id,
     null,
     "A few hooks that lead with altitude and craft:\n- \"Grown at 2,000 meters. Roasted for the mornings that matter.\"\n- \"This bean traveled higher than most flights.\"\n- \"Single-origin Ethiopia. Bright, floral, gone by Friday.\"\nWant these tuned for Reels captions or on-screen text?",
     t(12.5),
   );
-  await mkMsg(campaign.id, leo, "The first one is great. I'll drop it as the opening card.", t(15));
+  await mkMsg(campaign.id, rupanjay, "The first one is great. I'll drop it as the opening card.", t(15));
 
   console.log("Seed complete:");
   console.log(`  workspace: ${workspace.name}`);

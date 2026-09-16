@@ -57,7 +57,6 @@ export default async function LoginPage({
               name="email"
               type="email"
               required
-              defaultValue={demoUsers[0]?.email}
               className="w-full rounded-[var(--radius-input)] border bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--fg)]/40"
             />
           </div>
@@ -67,7 +66,6 @@ export default async function LoginPage({
               name="password"
               type="password"
               required
-              defaultValue="demo1234"
               className="w-full rounded-[var(--radius-input)] border bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--fg)]/40"
             />
           </div>
@@ -76,7 +74,7 @@ export default async function LoginPage({
 
         <div className="mt-6 rounded-[var(--radius-card)] border bg-[var(--surface)] p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-            Demo accounts · password demo1234
+            Demo workspace accounts
           </p>
           <ul className="mt-2 space-y-1 text-sm">
             {demoUsers.map((u) => (
