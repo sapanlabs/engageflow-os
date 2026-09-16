@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && prisma db push && next build",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma migrate reset --force"
   },
