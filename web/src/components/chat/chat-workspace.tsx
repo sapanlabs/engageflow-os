@@ -121,7 +121,7 @@ export function ChatWorkspace({ activeId, meId }: { activeId?: string; meId: str
     });
     if (res.ok) {
       const { data } = await res.json();
-      window.open(`/meet/${data.id}`, "_blank");
+      router.push(`/meet/${data.id}`);
     }
   }
 

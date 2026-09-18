@@ -170,7 +170,6 @@ function MessageBody({ body, meId }: { body: string; meId: string }) {
       {meetMatch && (
         <Link
           href={`/meet/${meetMatch[1]}`}
-          target="_blank"
           className="transition-quiet mt-2 inline-flex items-center gap-2 rounded-[var(--radius-input)] bg-[var(--accent)] px-3 py-1.5 text-xs font-medium text-[var(--accent-fg)]"
         >
           Join call

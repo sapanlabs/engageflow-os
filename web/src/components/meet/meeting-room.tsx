@@ -63,6 +63,7 @@ export function MeetingRoom({ id, meName }: { id: string; meName: string }) {
 
   const handleLeave = useCallback(() => {
     setJoined(false);
+    window.location.href = "/chat";
   }, []);
 
   const [showTranscript, setShowTranscript] = useState(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui";
 import { MeetIcon } from "@/components/icons";
 import { MessageList } from "@/components/chat/message-list";
@@ -11,6 +12,7 @@ import type { ChannelDetail, ChatMessage } from "@/components/chat/types";
 // tab. Shares the same message list, composer, reactions, threads, and calls as
 // the global chat hub, so the experience is identical.
 export function ChannelPane({ channelId, meId, heightClass }: { channelId: string; meId: string; heightClass?: string }) {
+  const router = useRouter();
   const [detail, setDetail] = useState<ChannelDetail | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [thread, setThread] = useState<ChatMessage | null>(null);
@@ -89,7 +91,7 @@ export function ChannelPane({ channelId, meId, heightClass }: { channelId: strin
     });
     if (res.ok) {
       const { data } = await res.json();
-      window.open(`/meet/${data.id}`, "_blank");
+      router.push(`/meet/${data.id}`);
     }
   }
 
