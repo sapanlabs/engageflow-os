@@ -526,22 +526,32 @@ export function CallStage({
 }
 
 // ---- helpers ----
-function stopAndDisconnect(room: Room | null) {
+async function stopAndDisconnect(room: Room | null) {
   if (!room) return;
   try {
     const local = room.localParticipant;
     if (local) {
       const pubs = Array.from(local.trackPublications.values());
       for (const pub of pubs) {
-        if (pub.track) {
-          try {
+        try {
+          if (pub.track) {
             pub.track.stop();
-          } catch { /* ignore */ }
-        }
+            if (pub.track.mediaStreamTrack) {
+              pub.track.mediaStreamTrack.stop();
+              pub.track.mediaStreamTrack.enabled = false;
+            }
+          }
+        } catch { /* ignore */ }
       }
-      local.setCameraEnabled(false).catch(() => {});
-      local.setMicrophoneEnabled(false).catch(() => {});
-      local.setScreenShareEnabled(false).catch(() => {});
+      try {
+        await local.setCameraEnabled(false);
+      } catch { /* ignore */ }
+      try {
+        await local.setMicrophoneEnabled(false);
+      } catch { /* ignore */ }
+      try {
+        await local.setScreenShareEnabled(false);
+      } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
   try {
