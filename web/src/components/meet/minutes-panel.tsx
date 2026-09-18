@@ -9,11 +9,13 @@ export function MinutesPanel({
   transcript,
   minutes,
   onMinutes,
+  onClose,
 }: {
   meetingId: string;
   transcript: TranscriptLine[];
   minutes: string | null;
   onMinutes: (m: string) => void;
+  onClose?: () => void;
 }) {
   const [tab, setTab] = useState<"transcript" | "minutes">("transcript");
   const [busy, setBusy] = useState(false);
@@ -51,13 +53,20 @@ export function MinutesPanel({
 
   return (
     <aside className="flex w-96 shrink-0 flex-col border-l bg-[var(--surface)]">
-      <div className="flex shrink-0 items-center gap-1 border-b p-2">
-        <TabButton active={tab === "transcript"} onClick={() => setTab("transcript")}>
-          Transcript {transcript.length > 0 && <span className="text-[var(--muted)]">· {transcript.length}</span>}
-        </TabButton>
-        <TabButton active={tab === "minutes"} onClick={() => setTab("minutes")}>
-          Minutes
-        </TabButton>
+      <div className="flex shrink-0 items-center justify-between border-b p-2">
+        <div className="flex items-center gap-1">
+          <TabButton active={tab === "transcript"} onClick={() => setTab("transcript")}>
+            Transcript {transcript.length > 0 && <span className="text-[var(--muted)]">· {transcript.length}</span>}
+          </TabButton>
+          <TabButton active={tab === "minutes"} onClick={() => setTab("minutes")}>
+            Minutes
+          </TabButton>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="rounded px-2.5 py-1 text-sm text-[var(--muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]" title="Close transcript">
+            ✕
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">

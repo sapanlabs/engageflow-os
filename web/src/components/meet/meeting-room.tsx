@@ -65,6 +65,8 @@ export function MeetingRoom({ id, meName }: { id: string; meName: string }) {
     setJoined(false);
   }, []);
 
+  const [showTranscript, setShowTranscript] = useState(false);
+
   if (error) {
     return <Shell><p className="text-sm text-[var(--muted)]">{error}</p></Shell>;
   }
@@ -110,16 +112,22 @@ export function MeetingRoom({ id, meName }: { id: string; meName: string }) {
               initialCamOn={joinOpts.initialCamOn}
               onCaption={pushTranscript}
               onLeave={handleLeave}
+              showTranscript={showTranscript}
+              onToggleTranscript={() => setShowTranscript((prev) => !prev)}
+              latestCaption={transcript.length > 0 ? transcript[transcript.length - 1] : null}
             />
           )}
         </div>
 
-        <MinutesPanel
-          meetingId={id}
-          transcript={transcript}
-          minutes={minutes}
-          onMinutes={(m) => { setMinutes(m); }}
-        />
+        {showTranscript && (
+          <MinutesPanel
+            meetingId={id}
+            transcript={transcript}
+            minutes={minutes}
+            onMinutes={(m) => { setMinutes(m); }}
+            onClose={() => setShowTranscript(false)}
+          />
+        )}
       </div>
     </div>
   );
