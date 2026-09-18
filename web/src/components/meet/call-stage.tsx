@@ -340,9 +340,9 @@ export function CallStage({
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-3">
+    <div className="flex flex-1 flex-col gap-3 overflow-hidden">
       {/* status bar */}
-      <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+      <div className="flex shrink-0 items-center gap-3 text-xs text-[var(--muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span className={cn("h-2 w-2 rounded-full", reconnecting ? "bg-[#C9A227]" : "bg-[#2E7D4F]")} />
           {reconnecting ? "Reconnecting…" : "Connected"}
@@ -363,17 +363,17 @@ export function CallStage({
       </div>
 
       {/* stage */}
-      <div className="flex min-h-0 flex-1 gap-3">
-        <div className="relative min-w-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           {screenSharer ? (
-            /* Requirement 2: Screen Sharing 80% / 20% Split */
-            <div className="flex h-full flex-col gap-3">
+            /* Requirement 2: Screen Sharing 80% / 20% Split - No scrolling */
+            <div className="flex h-full flex-col gap-3 overflow-hidden">
               <div className="relative h-[80%] min-h-0 w-full overflow-hidden rounded-[var(--radius-card)] border bg-[#0A0A0A]">
                 <ParticipantTile participant={screenSharer} source={Track.Source.ScreenShare} speaking={false} big />
               </div>
-              <div className="flex h-[20%] min-h-0 shrink-0 items-center gap-2 overflow-x-auto">
+              <div className="flex h-[20%] min-h-0 shrink-0 items-center gap-2 overflow-hidden">
                 {participants.slice(0, 4).map((p) => (
-                  <div key={p.sid} className="aspect-video h-full shrink-0">
+                  <div key={p.sid} className="h-full flex-1 min-w-0 aspect-video">
                     <ParticipantTile participant={p} source={Track.Source.Camera} speaking={speaking.has(p.sid)} />
                   </div>
                 ))}
@@ -381,22 +381,22 @@ export function CallStage({
                   <button
                     type="button"
                     onClick={() => setShowPeople(true)}
-                    className="flex aspect-video h-full shrink-0 flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] px-3 text-xs font-medium text-[var(--muted)] transition hover:border-[var(--fg)]/40 hover:text-[var(--fg)]"
+                    className="flex h-full flex-1 min-w-0 aspect-video flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--muted)] transition hover:border-[var(--fg)]/40 hover:text-[var(--fg)]"
                   >
-                    <span>+{participants.length - 4} more</span>
-                    <span className="mt-0.5 text-[10px] text-[var(--accent)] underline">Show All</span>
+                    <span className="truncate">+{participants.length - 4} more</span>
+                    <span className="mt-0.5 truncate text-[10px] text-[var(--accent)] underline">Show All</span>
                   </button>
                 )}
               </div>
             </div>
           ) : effectiveLayout === "spotlight" ? (
-            <div className="flex h-full flex-col gap-3">
-              <div className="min-h-0 flex-1">
+            <div className="flex h-full flex-col gap-3 overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <ParticipantTile participant={activeSpeakerOf(participants, speaking)} source={Track.Source.Camera} speaking big />
               </div>
-              <div className="flex h-24 shrink-0 items-center gap-2 overflow-x-auto">
+              <div className="flex h-24 shrink-0 items-center gap-2 overflow-hidden">
                 {participants.slice(0, 4).map((p) => (
-                  <div key={p.sid} className="aspect-video h-full shrink-0">
+                  <div key={p.sid} className="h-full flex-1 min-w-0 aspect-video">
                     <ParticipantTile participant={p} source={Track.Source.Camera} speaking={speaking.has(p.sid)} />
                   </div>
                 ))}
@@ -404,17 +404,17 @@ export function CallStage({
                   <button
                     type="button"
                     onClick={() => setShowPeople(true)}
-                    className="flex aspect-video h-full shrink-0 flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] px-3 text-xs font-medium text-[var(--muted)] transition hover:border-[var(--fg)]/40 hover:text-[var(--fg)]"
+                    className="flex h-full flex-1 min-w-0 aspect-video flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] px-2 text-xs font-medium text-[var(--muted)] transition hover:border-[var(--fg)]/40 hover:text-[var(--fg)]"
                   >
-                    <span>+{participants.length - 4} more</span>
-                    <span className="mt-0.5 text-[10px] text-[var(--accent)] underline">Show All</span>
+                    <span className="truncate">+{participants.length - 4} more</span>
+                    <span className="mt-0.5 truncate text-[10px] text-[var(--accent)] underline">Show All</span>
                   </button>
                 )}
               </div>
             </div>
           ) : (
             /* Requirement 3: Max 4 joined users in grid + "Show All" card if >4 */
-            <div className={cn("grid h-full gap-3", gridCols(participants.length > 4 ? 5 : participants.length))}>
+            <div className={cn("grid h-full gap-3 overflow-hidden", gridCols(participants.length > 4 ? 5 : participants.length))}>
               {participants.slice(0, 4).map((p) => (
                 <ParticipantTile key={p.sid} participant={p} source={Track.Source.Camera} speaking={speaking.has(p.sid)} />
               ))}
@@ -422,15 +422,15 @@ export function CallStage({
                 <button
                   type="button"
                   onClick={() => setShowPeople(true)}
-                  className="flex h-full w-full min-h-[140px] flex-col items-center justify-center gap-2 rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] p-4 text-center transition hover:border-[var(--fg)]/40 hover:bg-[var(--surface)]"
+                  className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-1.5 rounded-[var(--radius-card)] border border-dashed bg-[var(--surface-2)] p-3 text-center transition hover:border-[var(--fg)]/40 hover:bg-[var(--surface)]"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent)]/15 text-base font-bold text-[var(--accent)]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]/15 text-sm font-bold text-[var(--accent)]">
                     +{participants.length - 4}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-[var(--fg)]">+{participants.length - 4} More Participants</p>
-                    <p className="mt-0.5 text-xs text-[var(--muted)]">View full participant list</p>
-                    <span className="mt-2 inline-block rounded-full bg-[var(--accent)]/10 px-3 py-1 text-xs font-medium text-[var(--accent)]">
+                    <p className="text-xs font-semibold text-[var(--fg)]">+{participants.length - 4} More Participants</p>
+                    <p className="mt-0.5 text-[11px] text-[var(--muted)]">View full participant list</p>
+                    <span className="mt-1.5 inline-block rounded-full bg-[var(--accent)]/10 px-2.5 py-0.5 text-[11px] font-medium text-[var(--accent)]">
                       Show All →
                     </span>
                   </div>

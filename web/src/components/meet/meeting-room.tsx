@@ -75,7 +75,7 @@ export function MeetingRoom({ id, meName }: { id: string; meName: string }) {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-[var(--bg)]">
+    <div className="flex h-dvh w-full flex-col overflow-hidden bg-[var(--bg)]">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b px-5">
         <Link href="/chat" className="font-display text-lg">EngageFlow</Link>
         <span className="text-[var(--muted)]">/</span>
@@ -86,8 +86,8 @@ export function MeetingRoom({ id, meName }: { id: string; meName: string }) {
         <div className="ml-auto text-xs text-[var(--muted)]">Started by {meeting.createdByName}</div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col p-4">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
           {!meeting.callConfigured ? (
             <NotConfigured />
           ) : !joined && meeting.status !== "ENDED" ? (
